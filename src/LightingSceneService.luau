@@ -1,9 +1,6 @@
 --!strict
 
 local Lighting = game:GetService("Lighting")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local do_tween = require(ReplicatedStorage.Shared.utils.do_tween)
 
 type LightingData = {
 	Lighting: {
@@ -166,6 +163,35 @@ local function write_lightingdata(data: LightingData)
 	end
 end
 
+--[=[
+	Performs a tween over a set duration, calling the update_function with an alpha value from 0 to 1.
+	The update_function can return false to exit the tween early.
+
+	@yields
+
+	@param duration number -- The duration of the tween in seconds.
+	@param update_function (number) -> boolean? -- A function that takes an alpha value (from 0 to 1) and performs any updates. If it returns false, the tween will exit early.
+]=]
+local function do_tween(duration: number, update_function: (number) -> boolean?)
+	update_function(0)
+
+	local start = tick()
+	while true do
+		task.wait()
+		local delta = tick() - start
+		local alpha = delta / duration
+		if alpha >= 1 then
+			break
+		end
+
+		local ret = update_function(alpha)
+		if ret == false then
+			return -- Early exit
+		end
+	end
+	update_function(1)
+end
+
 --- Linearly interpolates between two LightingData tables based on alpha (0.0 - 1.0).
 local function lerp_lightingdata(data_a: LightingData, data_b: LightingData, alpha: number): LightingData
 	-- Finding all keys present in either data_a or data_b
@@ -223,7 +249,7 @@ local function lerp_lightingdata(data_a: LightingData, data_b: LightingData, alp
 			if typeof(value_a) == "number" then
 				result[instance_type][key] = math.lerp(value_a, value_b, alpha)
 			elseif typeof(value_a) == "Color3" or typeof(value_a) == "Vector3" then
-				result[instance_type][key] = value_a:Lerp(value_b, alpha)
+				result[instance_type][key] = (value_a :: never):Lerp(value_b, alpha)
 			else
 				-- Unsupported type, step function
 				result[instance_type][key] = if alpha < 0.5 then value_a else value_b
