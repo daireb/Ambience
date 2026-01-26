@@ -52,7 +52,9 @@ export type Soundscape = {
 	_parent: Soundscape?,
 	_tracks: { SoundscapeTrack },
 	_isActive: boolean,
+	_currentFadeId: number,
 
+	_CancelFade: (self: Soundscape) -> nil,
 	_FadeOutAndStop: (self: Soundscape, duration: number) -> nil,
 	_SetTransitionVolume: (self: Soundscape, volume: number) -> nil,
 	_FadeIn: (self: Soundscape, duration: number) -> nil,
@@ -288,6 +290,7 @@ Soundscape.new = function(id: string, tracks: { SoundscapeTrack }?)
 	self.Id = id
 	self._tracks = tracks or {}
 	self._isActive = false
+	self._currentFadeId = 0
 
 	if tracks then
 		for i, k in ipairs(tracks) do
@@ -320,13 +323,25 @@ function Soundscape:Stop()
 	end
 end
 
+--- Cancels any in-progress fade operation
+function Soundscape._CancelFade(self: Soundscape)
+	self._currentFadeId += 1
+end
+
 --- Fades out all tracks over the specified duration, then stops the soundscape
-function Soundscape:_FadeOutAndStop(duration: number)
+function Soundscape._FadeOutAndStop(self: Soundscape, duration: number)
 	self._isActive = false
+	self._currentFadeId += 1
+	local fadeId = self._currentFadeId
 	local start_time = tick()
 
 	task.spawn(function()
 		while tick() - start_time < duration do
+			-- Check if this fade was cancelled
+			if self._currentFadeId ~= fadeId then
+				return
+			end
+
 			local alpha = (tick() - start_time) / duration
 			local volume = 1 - alpha
 
@@ -335,6 +350,11 @@ function Soundscape:_FadeOutAndStop(duration: number)
 			end
 
 			task.wait()
+		end
+
+		-- Check if this fade was cancelled before stopping
+		if self._currentFadeId ~= fadeId then
+			return
 		end
 
 		-- Ensure we're fully faded out and stopped
@@ -355,11 +375,18 @@ function Soundscape:_SetTransitionVolume(volume: number)
 end
 
 --- Fades in all tracks from current transition volume to 1 over the specified duration
-function Soundscape:_FadeIn(duration: number)
+function Soundscape._FadeIn(self: Soundscape, duration: number)
+	self._currentFadeId += 1
+	local fadeId = self._currentFadeId
 	local start_time = tick()
 
 	task.spawn(function()
 		while tick() - start_time < duration do
+			-- Check if this fade was cancelled
+			if self._currentFadeId ~= fadeId then
+				return
+			end
+
 			local alpha = (tick() - start_time) / duration
 
 			for _, track in ipairs(self._tracks) do
@@ -367,6 +394,11 @@ function Soundscape:_FadeIn(duration: number)
 			end
 
 			task.wait()
+		end
+
+		-- Check if this fade was cancelled before finalizing
+		if self._currentFadeId ~= fadeId then
+			return
 		end
 
 		-- Ensure we're fully faded in
@@ -439,6 +471,8 @@ SoundscapeHandler.SetActive = function(id: string?, options: SetActiveOptions?)
 
 	-- Handle the old soundscape
 	if current_soundscape then
+		-- Cancel any ongoing fade on the old soundscape before starting fade out
+		current_soundscape:_CancelFade()
 		if fade_time and fade_time > 0 then
 			current_soundscape:_FadeOutAndStop(fade_time)
 		else
@@ -449,6 +483,8 @@ SoundscapeHandler.SetActive = function(id: string?, options: SetActiveOptions?)
 	-- Update to the new soundscape and activate it if needed
 	current_soundscape = new_soundscape
 	if current_soundscape then
+		-- Cancel any ongoing fade on the new soundscape (in case it was previously fading out)
+		current_soundscape:_CancelFade()
 		if fade_time and fade_time > 0 then
 			-- Start with volume at 0 and fade in
 			current_soundscape:_SetTransitionVolume(0)
