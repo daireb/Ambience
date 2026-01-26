@@ -52,6 +52,10 @@ export type Soundscape = {
 	_parent: Soundscape?,
 	_tracks: { SoundscapeTrack },
 	_isActive: boolean,
+
+	_FadeOutAndStop: (self: Soundscape, duration: number) -> nil,
+	_SetTransitionVolume: (self: Soundscape, volume: number) -> nil,
+	_FadeIn: (self: Soundscape, duration: number) -> nil,
 }
 
 local SOUND_FOLDER = Instance.new("Folder")
