@@ -84,10 +84,10 @@ return Ambience.preset({
 })
 ```
 
-### Combined preset with layering
+### Combined preset with modifiers
 
 ```lua
--- presets/Rain.luau  (priority 10 overrides lower layers' fog/brightness)
+-- presets/Rain.luau  (priority 10, modifies brightness relative to base)
 local Ambience = require(ReplicatedStorage.Package)
 local Track = Ambience.Track
 
@@ -99,8 +99,14 @@ rain.Looped = true
 return Ambience.preset({
     priority = 10,
     lighting = {
-        Lighting = { FogEnd = 1800, Brightness = 1.4 },
-        Atmosphere = { Density = 0.45, Haze = 3 },
+        Lighting = {
+            FogEnd = 1800,
+            Brightness = function(current) return current * 0.5 end,
+        },
+        Atmosphere = {
+            Density = function(current) return current + 0.15 end,
+            Haze = function(current) return current * 1.5 end,
+        },
     },
     sounds = {
         Track.looping(rain):ModifyVolume(0.7):AutoFadeInOut(3),
@@ -206,8 +212,11 @@ two-pass per property:
 
 This supports relative modifiers like rain darkening day/night differently while
 keeping fixed overrides simple. Properties not defined by any layer are left at
-their Roblox defaults. Transitions smoothly interpolate between the old and new
-resolved state.
+their Roblox defaults.
+
+During transitions, only properties defined by the pushed/popped layer are
+interpolated. All other properties (including dynamic values like a ticking
+`ClockTime`) continue updating live.
 
 **Sound**: All active layers' tracks play simultaneously. Each layer's tracks
 share a transition volume that fades in on push and out on pop, independent of

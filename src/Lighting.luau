@@ -227,6 +227,75 @@ local function lerp_lightingdata(data_a: LightingData, data_b: LightingData, alp
 	return result
 end
 
+local function selective_lerp_lightingdata(
+	data_a: LightingData,
+	data_b: LightingData,
+	alpha: number,
+	transition_keys: { [string]: { [string]: true } }?
+): LightingData
+	local key_map = {}
+	for instance_type, tab in pairs(data_a) do
+		key_map[instance_type] = {}
+		for key, _ in pairs(tab) do
+			key_map[instance_type][key] = true
+		end
+	end
+
+	for instance_type, tab in pairs(data_b) do
+		if not key_map[instance_type] then
+			key_map[instance_type] = {}
+		end
+		for key, _ in pairs(tab) do
+			key_map[instance_type][key] = true
+		end
+	end
+
+	local result = {} :: LightingData
+	for instance_type, key_map_for_type in pairs(key_map) do
+		result[instance_type] = {}
+
+		for key, _ in pairs(key_map_for_type) do
+			local value_a = data_a[instance_type] and data_a[instance_type][key]
+			local value_b = data_b[instance_type] and data_b[instance_type][key]
+
+			local should_lerp = transition_keys == nil
+				or (transition_keys[instance_type] ~= nil and transition_keys[instance_type][key] == true)
+
+			if not should_lerp then
+				if value_b ~= nil then
+					result[instance_type][key] = value_b
+				elseif value_a ~= nil then
+					result[instance_type][key] = value_a
+				end
+				continue
+			end
+
+			if value_a == nil then
+				result[instance_type][key] = value_b
+				continue
+			elseif value_b == nil then
+				result[instance_type][key] = value_a
+				continue
+			end
+
+			if typeof(value_a) ~= typeof(value_b) then
+				result[instance_type][key] = if alpha < 0.5 then value_a else value_b
+				continue
+			end
+
+			if typeof(value_a) == "number" then
+				result[instance_type][key] = math.lerp(value_a, value_b, alpha)
+			elseif typeof(value_a) == "Color3" or typeof(value_a) == "Vector3" then
+				result[instance_type][key] = (value_a :: never):Lerp(value_b, alpha)
+			else
+				result[instance_type][key] = if alpha < 0.5 then value_a else value_b
+			end
+		end
+	end
+
+	return result
+end
+
 local function resolve_lighting(layers: { ResolvableLightingData }): (LightingData, boolean)
 	local key_map: { [string]: { [string]: boolean } } = {}
 	for _, layer in ipairs(layers) do
@@ -301,4 +370,5 @@ return {
 	clear_lighting = clear_lighting,
 	do_tween = do_tween,
 	lerp_lightingdata = lerp_lightingdata,
+	selective_lerp_lightingdata = selective_lerp_lightingdata,
 }

@@ -26,7 +26,6 @@ local presets: { [string]: Preset } = {}
 local active_layers: { LayerState } = {}
 
 local lighting_transition_token = 0
-local dynamic_loop_token = 0
 local current_lighting_state: LightingData = {}
 
 local function is_empty_lighting(data: LightingData): boolean
@@ -122,58 +121,82 @@ local function write_lighting_snapshot(data: LightingData)
 	end
 end
 
-local function apply_lighting_target(target: LightingData, transition: number?)
+local function get_lighting_keys(p: Preset): { [string]: { [string]: true } }?
+	if not p.lighting then
+		return nil
+	end
+	local keys: { [string]: { [string]: true } } = {}
+	for instance_type, properties in pairs(p.lighting) do
+		if properties then
+			keys[instance_type] = {}
+			for key, _ in pairs(properties) do
+				keys[instance_type][key] = true
+			end
+		end
+	end
+	return keys
+end
+
+local function start_dynamic_loop(token: number)
+	task.spawn(function()
+		while lighting_transition_token == token do
+			task.wait()
+			local resolved, still_dynamic = LightingModule.resolve_lighting(collect_lighting_layers())
+			LightingModule.write_lightingdata(resolved)
+			LightingModule.clear_stale_instances(resolved)
+			current_lighting_state = resolved
+			if not still_dynamic then
+				return
+			end
+		end
+	end)
+end
+
+local function refresh_lighting(transition: number?, transition_keys: { [string]: { [string]: true } }?)
 	lighting_transition_token += 1
 	local my_token = lighting_transition_token
 	local duration = transition or 0
 
+	local new_resolved, new_dynamic = LightingModule.resolve_lighting(collect_lighting_layers())
+
 	if duration <= 0 or is_empty_lighting(current_lighting_state) then
-		write_lighting_snapshot(target)
-		current_lighting_state = target
+		write_lighting_snapshot(new_resolved)
+		current_lighting_state = new_resolved
+		if new_dynamic then
+			start_dynamic_loop(my_token)
+		end
 		return
 	end
 
+	local from_snapshot = current_lighting_state
+
 	task.spawn(function()
-		local start_state = current_lighting_state
-		LightingModule.do_tween(duration, function(alpha)
+		local start_time = os.clock()
+		while os.clock() - start_time < duration do
 			if lighting_transition_token ~= my_token then
-				return false
+				return
 			end
-			local lerped = LightingModule.lerp_lightingdata(start_state, target, alpha)
-			LightingModule.write_lightingdata(lerped)
-			return true
-		end)
+
+			local alpha = (os.clock() - start_time) / duration
+			local target = LightingModule.resolve_lighting(collect_lighting_layers())
+			local frame = LightingModule.selective_lerp_lightingdata(
+				from_snapshot, target, alpha, transition_keys
+			)
+
+			LightingModule.write_lightingdata(frame)
+			current_lighting_state = frame
+			task.wait()
+		end
 
 		if lighting_transition_token ~= my_token then
 			return
 		end
 
-		write_lighting_snapshot(target)
-		current_lighting_state = target
-	end)
-end
-
-local function refresh_lighting(transition: number?)
-	local layers = collect_lighting_layers()
-	local resolved, has_dynamic = LightingModule.resolve_lighting(layers)
-	apply_lighting_target(resolved, transition)
-
-	dynamic_loop_token += 1
-	local my_token = dynamic_loop_token
-	if not has_dynamic then
-		return
-	end
-
-	task.spawn(function()
-		while dynamic_loop_token == my_token do
-			task.wait()
-			local dynamic_resolved, still_dynamic = LightingModule.resolve_lighting(collect_lighting_layers())
-			LightingModule.write_lightingdata(dynamic_resolved)
-			LightingModule.clear_stale_instances(dynamic_resolved)
-			current_lighting_state = dynamic_resolved
-			if not still_dynamic then
-				return
-			end
+		local final, final_dynamic = LightingModule.resolve_lighting(collect_lighting_layers())
+		write_lighting_snapshot(final)
+		current_lighting_state = final
+		if final_dynamic then
+			start_dynamic_loop(my_token)
 		end
 	end)
 end
@@ -258,7 +281,7 @@ local function push(id: string, options: TransitionOptions?)
 
 	local transition = options and options.transition or 0
 	add_layer(id, preset_data, transition)
-	refresh_lighting(transition)
+	refresh_lighting(transition, get_lighting_keys(preset_data))
 end
 
 local function pop(id: string, options: TransitionOptions?)
@@ -268,8 +291,10 @@ local function pop(id: string, options: TransitionOptions?)
 	end
 
 	local transition = options and options.transition or 0
+	local layer_preset = active_layers[index].preset
+	local keys = get_lighting_keys(layer_preset)
 	remove_layer_at(index, transition)
-	refresh_lighting(transition)
+	refresh_lighting(transition, keys)
 end
 
 local function clear(options: TransitionOptions?)
@@ -277,7 +302,7 @@ local function clear(options: TransitionOptions?)
 	while #active_layers > 0 do
 		remove_layer_at(1, transition)
 	end
-	refresh_lighting(transition)
+	refresh_lighting(transition, nil)
 end
 
 local function set(id: string, options: TransitionOptions?)
@@ -294,7 +319,7 @@ local function set(id: string, options: TransitionOptions?)
 		end
 		add_layer(id, preset_data, transition)
 	end
-	refresh_lighting(transition)
+	refresh_lighting(transition, nil)
 end
 
 local function isActive(id: string): boolean

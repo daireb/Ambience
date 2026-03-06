@@ -29,7 +29,7 @@ local transitionTime = 1
 local activeLabel: TextLabel? = nil
 local presetButtons: { [string]: TextButton } = {}
 
-local PRESETS = { "Day", "Night", "Sunset", "Forest", "Rain", "Wind" }
+local PRESETS = { "Day", "Night", "Sunset", "Forest", "Rain", "Wind", "Fog", "Sandstorm" }
 local SET_PRESETS = { "Day", "Night", "Sunset" }
 
 local function createFrame(props: {
@@ -214,8 +214,8 @@ local function createUI()
 
 	local panel = createFrame({
 		name = "Panel",
-		size = UDim2.new(0, PANEL_WIDTH, 0, 530),
-		position = UDim2.new(0, 20, 0.5, -265),
+		size = UDim2.new(0, PANEL_WIDTH, 0, 610),
+		position = UDim2.new(0, 20, 0.5, -305),
 		color = COLORS.background,
 		parent = screenGui,
 	})
