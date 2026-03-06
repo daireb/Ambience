@@ -4,3 +4,5 @@ lune_packages/
 
 *.rbxl
 *.rbxl.lock
+
+sourcemap.json
