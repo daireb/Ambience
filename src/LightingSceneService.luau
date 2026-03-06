@@ -1,72 +1,72 @@
 --!strict
 
 local Lighting = game:GetService("Lighting")
+local current_scene_id: string? = nil
 
-type LightingData = {
+export type LightingData = {
 	Lighting: {
-		Ambient: Color3,
-		Brightness: number,
+		Ambient: Color3?,
+		Brightness: number?,
 
-		ColorShift_Bottom: Color3,
-		ColorShift_Top: Color3,
+		ColorShift_Bottom: Color3?,
+		ColorShift_Top: Color3?,
 
-		OutdoorAmbient: Color3,
-		ShadowSoftness: number,
+		OutdoorAmbient: Color3?,
+		ShadowSoftness: number?,
 
-		GeographicLatitude: number,
+		GeographicLatitude: number?,
+		ClockTime: number?,
+		TimeOfDay: string?,
 
-		FogEnd: number,
-		FogStart: number,
-		FogColor: Color3,
-	},
+		FogEnd: number?,
+		FogStart: number?,
+		FogColor: Color3?,
+	}?,
 	Atmosphere: {
-		Density: number,
-		Offset: number,
+		Density: number?,
+		Offset: number?,
 
-		Color: Color3,
-		Decay: Color3,
-		Glare: number,
-		Haze: number,
-	},
+		Color: Color3?,
+		Decay: Color3?,
+		Glare: number?,
+		Haze: number?,
+	}?,
 	Sky: {
-		CelestialBodiesShown: boolean,
-		MoonAngularSize: number,
-		MoonTextureId: string,
-		SunAngularSize: number,
-		SunTextureId: string,
-		StarCount: number,
+		CelestialBodiesShown: boolean?,
+		MoonAngularSize: number?,
+		MoonTextureId: string?,
+		SunAngularSize: number?,
+		SunTextureId: string?,
+		StarCount: number?,
 
-		SkyboxBk: string,
-		SkyboxDn: string,
-		SkyboxFt: string,
-		SkyboxLf: string,
-		SkyboxRt: string,
-		SkyboxUp: string,
-	},
+		SkyboxBk: string?,
+		SkyboxDn: string?,
+		SkyboxFt: string?,
+		SkyboxLf: string?,
+		SkyboxRt: string?,
+		SkyboxUp: string?,
+	}?,
 	Clouds: {
-		Cover: number,
-		Density: number,
-		Enabled: boolean,
-		Color: Color3,
-	},
+		Cover: number?,
+		Density: number?,
+		Enabled: boolean?,
+		Color: Color3?,
+	}?,
 	SunRaysEffect: {
-		Intensity: number,
-		Spread: number,
-		Enabled: boolean,
-	},
+		Intensity: number?,
+		Spread: number?,
+		Enabled: boolean?,
+	}?,
 	ColorCorrectionEffect: {
-		Brightness: number,
-		Contrast: number,
-		Saturation: number,
-		TintColor: Color3,
-		Enabled: boolean,
-	},
+		Brightness: number?,
+		Contrast: number?,
+		Saturation: number?,
+		TintColor: Color3?,
+		Enabled: boolean?,
+	}?,
 	Workspace: {
-		GlobalWind: Vector3,
-	},
-	Other: { -- Miscellaneous properties
-		[string]: any,
-	},
+		GlobalWind: Vector3?,
+	}?,
 }
 
 --[=[
@@ -147,7 +147,7 @@ local function write_to_instance(instance_type: string, properties_table: { [str
 			(instance :: never)[key] = value
 		end
 	else
-		if instance then
+		if instance and instance_type ~= "Lighting" and instance_type ~= "Workspace" then
 			instance:Destroy()
 		end
 	end
@@ -155,11 +155,23 @@ end
 
 local function write_lightingdata(data: LightingData)
 	for instance_type, tab in pairs(data) do
-		if instance_type == "Other" then
-			continue
-		end
+		write_to_instance(instance_type, tab :: { [string]: any }?)
+	end
+end
 
-		write_to_instance(instance_type, tab)
+local function clear_stale_instances(data: LightingData)
+	local class_data: { [string]: { [string]: any }? } = {
+		Atmosphere = data.Atmosphere :: { [string]: any }?,
+		Sky = data.Sky :: { [string]: any }?,
+		SunRaysEffect = data.SunRaysEffect :: { [string]: any }?,
+		ColorCorrectionEffect = data.ColorCorrectionEffect :: { [string]: any }?,
+		Clouds = data.Clouds :: { [string]: any }?,
+	}
+
+	for class_name, properties in pairs(class_data) do
+		if properties == nil then
+			write_to_instance(class_name, nil)
+		end
 	end
 end
 
@@ -175,10 +187,10 @@ end
 local function do_tween(duration: number, update_function: (number) -> boolean?)
 	update_function(0)
 
-	local start = tick()
+	local start = os.clock()
 	while true do
 		task.wait()
-		local delta = tick() - start
+		local delta = os.clock() - start
 		local alpha = delta / duration
 		if alpha >= 1 then
 			break
@@ -323,6 +335,10 @@ function LightingScene.GetCurrentLightingData(self: LightingScenePrivate): Light
 	return self._cache
 end
 
+function LightingScene.IsActive(self: LightingScenePrivate): boolean
+	return current_scene_id == self.Id
+end
+
 --- Options for SetActive
 type SetActiveOptions = {
 	tweenTime: number?,
@@ -331,8 +347,6 @@ type SetActiveOptions = {
 --- Lighting Scene Service - coordinates lighting scenes
 local LightingSceneService = {}
 LightingSceneService.Scene = LightingScene
-
-local current_scene_id: string? = nil
 
 local registered_scenes: { [string]: LightingScene } = {}
 
@@ -384,62 +398,66 @@ LightingSceneService.SetActive = function(id: string?, options: SetActiveOptions
 		return
 	end
 
-	print(`[LightingSceneService] Setting active scene to "{id}"`)
-
-	local my_timestamp = tick()
+	local my_timestamp = os.clock()
 	local tween_time = options and options.tweenTime
 
 	last_lighting_changed = my_timestamp
 	current_scene_id = id
 
-	LightingSceneService.ClearLighting()
+	if not id then
+		LightingSceneService.ClearLighting()
+		current_active_scene = nil
+		return
+	end
 
 	-- Start update loop
-	if id then
-		local target_scene = registered_scenes[id]
-		local old_scene = current_active_scene
+	local target_scene = registered_scenes[id]
+	local old_scene = current_active_scene
+	local should_tween = old_scene ~= nil and tween_time ~= nil and tween_time > 0
 
-		current_active_scene = target_scene
+	current_active_scene = target_scene
 
-		task.spawn(function()
-			-- Initial lerp
-			if old_scene and tween_time and tween_time > 0 then
-				do_tween(tween_time, function(alpha)
-					if last_lighting_changed ~= my_timestamp then
-						-- Scene changed during lerp, abort
-						return false
-					end
-
-					-- Lerp between old and new scene
-					local lerped_data = lerp_lightingdata(
-						old_scene:GetCurrentLightingData(),
-						target_scene:GetCurrentLightingData(),
-						alpha
-					)
-
-					write_lightingdata(lerped_data)
-
-					return true
-				end)
-			end
-
-			if last_lighting_changed ~= my_timestamp then
-				-- Scene changed during lerp, abort
-				return
-			end
-
-			-- Final write to ensure exact values
-			target_scene:UpdateAndWriteData(false)
-
-			-- Updating loop
-			while last_lighting_changed == my_timestamp do
-				target_scene:UpdateAndWriteData(true)
-				task.wait(1)
-			end
-		end)
-	else
-		current_active_scene = nil
+	if not should_tween then
+		LightingSceneService.ClearLighting()
 	end
+
+	task.spawn(function()
+		-- Initial lerp
+		if should_tween and old_scene and tween_time then
+			do_tween(tween_time, function(alpha)
+				if last_lighting_changed ~= my_timestamp then
+					-- Scene changed during lerp, abort
+					return false
+				end
+
+				-- Lerp between old and new scene
+				local lerped_data = lerp_lightingdata(
+					old_scene:GetCurrentLightingData(),
+					target_scene:GetCurrentLightingData(),
+					alpha
+				)
+
+				write_lightingdata(lerped_data)
+
+				return true
+			end)
+		end
+
+		if last_lighting_changed ~= my_timestamp then
+			-- Scene changed during lerp, abort
+			return
+		end
+
+		-- Final write to ensure exact values
+		target_scene:UpdateAndWriteData(false)
+		clear_stale_instances(target_scene:GetCurrentLightingData())
+
+		-- Updating loop
+		while last_lighting_changed == my_timestamp do
+			target_scene:UpdateAndWriteData(true)
+			task.wait(1)
+		end
+	end)
 end
 
 --- Gets the currently active lighting scene, or nil if no scene is active.

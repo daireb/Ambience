@@ -8,7 +8,7 @@ local SoundService = game:GetService("SoundService")
 ]]
 
 --- A single audio track, a component of a soundscape
-type SoundscapeTrack = {
+export type SoundscapeTrack = {
 	--- Checks if the track is currently active (i.e. is it playing)
 	IsActive: (self: SoundscapeTrack) -> boolean,
 
@@ -32,7 +32,18 @@ type SoundscapeTrack = {
 	--- Returns a unique identifier for this track, in the format "SoundscapeName#TrackIndex"
 	GetFullId: (self: SoundscapeTrack) -> string,
 
-	_parent: Soundscape?,
+}
+
+--- A collection of tracks that can be activated and deactivated together
+export type Soundscape = {
+	Id: string,
+
+	Activate: (self: Soundscape) -> nil,
+	Stop: (self: Soundscape) -> nil,
+}
+
+type SoundscapeTrackPrivate = SoundscapeTrack & {
+	_parent: SoundscapePrivate?,
 	_currentSound: Sound?,
 	_pickNextSound: ({ [string]: any }) -> Sound?,
 	_computeVolume: (Sound) -> number,
@@ -42,22 +53,15 @@ type SoundscapeTrack = {
 	_transitionVolume: number,
 }
 
---- A collection of tracks that can be activated and deactivated together
-export type Soundscape = {
-	Id: string,
-
-	Activate: (self: Soundscape) -> nil,
-	Stop: (self: Soundscape) -> nil,
-
-	_parent: Soundscape?,
-	_tracks: { SoundscapeTrack },
+type SoundscapePrivate = Soundscape & {
+	_tracks: { SoundscapeTrackPrivate },
 	_isActive: boolean,
 	_currentFadeId: number,
 
-	_CancelFade: (self: Soundscape) -> nil,
-	_FadeOutAndStop: (self: Soundscape, duration: number) -> nil,
-	_SetTransitionVolume: (self: Soundscape, volume: number) -> nil,
-	_FadeIn: (self: Soundscape, duration: number) -> nil,
+	_CancelFade: (self: SoundscapePrivate) -> nil,
+	_FadeOutAndStop: (self: SoundscapePrivate, duration: number) -> nil,
+	_SetTransitionVolume: (self: SoundscapePrivate, volume: number) -> nil,
+	_FadeIn: (self: SoundscapePrivate, duration: number) -> nil,
 }
 
 local SOUND_FOLDER = Instance.new("Folder")
@@ -81,7 +85,7 @@ SoundscapeTrack.__index = SoundscapeTrack
 	```SoundscapeTrack.new(function() return sounds[math.random(1, #sounds)] end)```
 ]=]
 SoundscapeTrack.new = function(pick_new_sound: ({ [string]: any }) -> Sound?): SoundscapeTrack
-	local self = setmetatable({}, SoundscapeTrack)
+	local self = setmetatable({}, SoundscapeTrack) :: any
 
 	self._currentSound = nil
 	self._pickNextSound = pick_new_sound
@@ -97,7 +101,7 @@ SoundscapeTrack.new = function(pick_new_sound: ({ [string]: any }) -> Sound?): S
 	self._playingId = -1
 	self._transitionVolume = 1
 
-	return self :: never
+	return self
 end
 
 -- Helper constructors
@@ -119,7 +123,7 @@ end
 -- Changing volume during playback
 
 --- Sets an arbitrary function to compute the volume of the sound during playback
-function SoundscapeTrack.ModifyVolume(self: SoundscapeTrack, modifier: ((Sound) -> number) | number)
+function SoundscapeTrack.ModifyVolume(self: SoundscapeTrackPrivate, modifier: ((Sound) -> number) | number)
 	local callback: (Sound) -> number = if typeof(modifier) == "number"
 		then function()
 			return modifier
@@ -134,7 +138,7 @@ function SoundscapeTrack.ModifyVolume(self: SoundscapeTrack, modifier: ((Sound) 
 	return self
 end
 
-function SoundscapeTrack.OnlyPlayWhile(self: SoundscapeTrack, callback: (Sound) -> boolean)
+function SoundscapeTrack.OnlyPlayWhile(self: SoundscapeTrackPrivate, callback: (Sound) -> boolean)
 	local old_callback = self._continuePlaying
 	self._continuePlaying = function(sound: Sound)
 		return old_callback(sound) and callback(sound)
@@ -143,7 +147,7 @@ function SoundscapeTrack.OnlyPlayWhile(self: SoundscapeTrack, callback: (Sound) 
 	return self
 end
 
-function SoundscapeTrack:AutoFadeInOut(fade_length: number?)
+function SoundscapeTrack.AutoFadeInOut(self: SoundscapeTrackPrivate, fade_length: number?)
 	local len = fade_length or 1
 
 	return self:ModifyVolume(function(sound: Sound)
@@ -154,7 +158,7 @@ end
 
 -- Setting conditions
 
-function SoundscapeTrack.OnlyStartPlayingIf(self: SoundscapeTrack, callback: () -> boolean)
+function SoundscapeTrack.OnlyStartPlayingIf(self: SoundscapeTrackPrivate, callback: () -> boolean)
 	local old_f = self._pickNextSound
 
 	self._pickNextSound = function(data)
@@ -167,22 +171,22 @@ function SoundscapeTrack.OnlyStartPlayingIf(self: SoundscapeTrack, callback: () 
 	return self
 end
 
-function SoundscapeTrack.AddRandomDelay(self: SoundscapeTrack, min: number, max: number)
+function SoundscapeTrack.AddRandomDelay(self: SoundscapeTrackPrivate, min: number, max: number)
 	local old_f = self._pickNextSound
 
 	self._pickNextSound = function(data: { nextSound: number? })
 		if data.nextSound == nil then -- first time
-			data.nextSound = tick() + min + math.random() * max
+			data.nextSound = os.clock() + min + math.random() * (max - min)
 		end
 
-		if tick() < data.nextSound :: number then -- still waiting
+		if os.clock() < data.nextSound :: number then -- still waiting
 			return nil
 		else -- time to pick a new sound
 			data.nextSound = nil
 			local new_sound = old_f(data)
 
 			if new_sound then
-				data.nextSound = tick() + min + math.random() * max + new_sound.TimeLength
+				data.nextSound = os.clock() + min + math.random() * (max - min) + new_sound.TimeLength
 			end
 
 			return new_sound
@@ -194,7 +198,7 @@ end
 
 -- Utility functions
 
-function SoundscapeTrack.GetFullId(self: SoundscapeTrack)
+function SoundscapeTrack.GetFullId(self: SoundscapeTrackPrivate)
 	if self._parent == nil then
 		return "unknown#unknown"
 	else
@@ -206,16 +210,16 @@ end
 
 -- Activating and stopping the track
 
-function SoundscapeTrack.IsActive(self: SoundscapeTrack)
+function SoundscapeTrack.IsActive(self: SoundscapeTrackPrivate)
 	return self._playingId ~= -1
 end
 
-function SoundscapeTrack.Activate(self: SoundscapeTrack)
+function SoundscapeTrack.Activate(self: SoundscapeTrackPrivate)
 	if self._playingId ~= -1 then
-		error("SoundscapeTrack is already playing")
+		return
 	end
 
-	local my_id = tick()
+	local my_id = os.clock()
 	self._playingId = my_id
 
 	task.spawn(function()
@@ -244,7 +248,8 @@ function SoundscapeTrack.Activate(self: SoundscapeTrack)
 
 			task.spawn(function()
 				while playing and self._currentSound do
-					sound.Volume = base_volume * self._computeVolume(self._currentSound) * self._transitionVolume -- Updating volume over time
+					sound.Volume =
+						base_volume * self._computeVolume(self._currentSound) * self._transitionVolume -- Updating volume over time
 
 					local should_be_playing = self._continuePlaying(self._currentSound) -- Updating whether we should be playing
 					if not should_be_playing then
@@ -268,9 +273,9 @@ function SoundscapeTrack.Activate(self: SoundscapeTrack)
 	end)
 end
 
-function SoundscapeTrack.Stop(self: SoundscapeTrack)
+function SoundscapeTrack.Stop(self: SoundscapeTrackPrivate)
 	if self._playingId == -1 then
-		error("SoundscapeTrack is not playing")
+		return
 	end
 
 	self._playingId = -1
@@ -285,16 +290,17 @@ local Soundscape = {}
 Soundscape.__index = Soundscape
 
 Soundscape.new = function(id: string, tracks: { SoundscapeTrack }?)
-	local self = setmetatable({}, Soundscape)
+	local self = setmetatable({}, Soundscape) :: any
 
 	self.Id = id
-	self._tracks = tracks or {}
+	self._tracks = (tracks or {}) :: { SoundscapeTrackPrivate }
 	self._isActive = false
 	self._currentFadeId = 0
 
 	if tracks then
-		for i, k in ipairs(tracks) do
-			k._parent = self :: never
+		for _, k in ipairs(tracks) do
+			local track = k :: SoundscapeTrackPrivate
+			track._parent = self
 		end
 	end
 
@@ -302,7 +308,7 @@ Soundscape.new = function(id: string, tracks: { SoundscapeTrack }?)
 end
 
 --- Activates the soundscape, causing all tracks to activate
-function Soundscape.Activate(self: Soundscape)
+function Soundscape.Activate(self: SoundscapePrivate)
 	self._isActive = true
 
 	for _, track in ipairs(self._tracks) do
@@ -313,7 +319,7 @@ function Soundscape.Activate(self: Soundscape)
 end
 
 --- Stops the soundscape, instantly stopping all tracks
-function Soundscape:Stop()
+function Soundscape.Stop(self: SoundscapePrivate)
 	self._isActive = false
 
 	for _, track in ipairs(self._tracks) do
@@ -324,25 +330,25 @@ function Soundscape:Stop()
 end
 
 --- Cancels any in-progress fade operation
-function Soundscape._CancelFade(self: Soundscape)
+function Soundscape._CancelFade(self: SoundscapePrivate)
 	self._currentFadeId += 1
 end
 
 --- Fades out all tracks over the specified duration, then stops the soundscape
-function Soundscape._FadeOutAndStop(self: Soundscape, duration: number)
+function Soundscape._FadeOutAndStop(self: SoundscapePrivate, duration: number)
 	self._isActive = false
 	self._currentFadeId += 1
 	local fadeId = self._currentFadeId
-	local start_time = tick()
+	local start_time = os.clock()
 
 	task.spawn(function()
-		while tick() - start_time < duration do
+		while os.clock() - start_time < duration do
 			-- Check if this fade was cancelled
 			if self._currentFadeId ~= fadeId then
 				return
 			end
 
-			local alpha = (tick() - start_time) / duration
+			local alpha = (os.clock() - start_time) / duration
 			local volume = 1 - alpha
 
 			for _, track in ipairs(self._tracks) do
@@ -368,26 +374,26 @@ function Soundscape._FadeOutAndStop(self: Soundscape, duration: number)
 end
 
 --- Sets the transition volume for all tracks (used for fade-in)
-function Soundscape:_SetTransitionVolume(volume: number)
+function Soundscape._SetTransitionVolume(self: SoundscapePrivate, volume: number)
 	for _, track in ipairs(self._tracks) do
 		track._transitionVolume = volume
 	end
 end
 
 --- Fades in all tracks from current transition volume to 1 over the specified duration
-function Soundscape._FadeIn(self: Soundscape, duration: number)
+function Soundscape._FadeIn(self: SoundscapePrivate, duration: number)
 	self._currentFadeId += 1
 	local fadeId = self._currentFadeId
-	local start_time = tick()
+	local start_time = os.clock()
 
 	task.spawn(function()
-		while tick() - start_time < duration do
+		while os.clock() - start_time < duration do
 			-- Check if this fade was cancelled
 			if self._currentFadeId ~= fadeId then
 				return
 			end
 
-			local alpha = (tick() - start_time) / duration
+			local alpha = (os.clock() - start_time) / duration
 
 			for _, track in ipairs(self._tracks) do
 				track._transitionVolume = alpha
@@ -419,7 +425,7 @@ SoundscapeHandler.Track = SoundscapeTrack
 SoundscapeHandler.Soundscape = Soundscape
 
 local soundscapes: { [string]: Soundscape } = {}
-local current_soundscape: Soundscape? = nil
+local current_soundscape: SoundscapePrivate? = nil
 
 --- Registers a soundscape so it can be activated later
 SoundscapeHandler.Register = function(soundscape: Soundscape)
@@ -432,7 +438,7 @@ end
 
 --- Finds all ModuleScripts in a Folder and registers the soundscapes they return
 SoundscapeHandler.RegisterFromFolder = function(folder: Folder)
-	for _, k in ipairs(folder:GetDescendants()) do
+	for _, k in ipairs(folder:GetChildren()) do
 		if k:IsA("ModuleScript") then
 			local soundscape = require(k) :: Soundscape
 			SoundscapeHandler.Register(soundscape)
@@ -462,8 +468,10 @@ SoundscapeHandler.SetActive = function(id: string?, options: SetActiveOptions?)
 		error(`No soundscape with Id "{id}" has been registered!`)
 	end
 
+	local new_soundscape_private = new_soundscape :: SoundscapePrivate?
+
 	-- Check if we're already in this soundscape
-	if current_soundscape == new_soundscape then
+	if current_soundscape == new_soundscape_private then
 		return
 	end
 
@@ -481,7 +489,7 @@ SoundscapeHandler.SetActive = function(id: string?, options: SetActiveOptions?)
 	end
 
 	-- Update to the new soundscape and activate it if needed
-	current_soundscape = new_soundscape
+	current_soundscape = new_soundscape_private
 	if current_soundscape then
 		-- Cancel any ongoing fade on the new soundscape (in case it was previously fading out)
 		current_soundscape:_CancelFade()

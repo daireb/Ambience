@@ -19,6 +19,11 @@
 local Lighting = require(script.LightingSceneService)
 local Sound = require(script.Soundscapes)
 
+export type LightingScene = Lighting.LightingScene
+export type LightingData = Lighting.LightingData
+export type Soundscape = Sound.Soundscape
+export type SoundscapeTrack = Sound.SoundscapeTrack
+
 return {
 	Lighting = Lighting,
 	Sound = Sound,

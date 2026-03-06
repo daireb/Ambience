@@ -62,7 +62,6 @@ scene:SetInitialLighting({
 	Workspace = {
 		GlobalWind = Vector3.new(2, 0, 1),
 	},
-	Other = {},
 })
 
 return scene
