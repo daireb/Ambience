@@ -9,7 +9,7 @@ lighting, while sounds from all active layers play simultaneously.
 ## Install
 
 ```bash
-pesde add gh#daireb/Ambience#v0.1.0
+pesde add gh#daireb/Ambience#v0.1.1
 ```
 
 ## Quick start
