@@ -9,6 +9,12 @@
       }
     },
 
+    "ServerScriptService": {
+      "Server": {
+        "$path": "testing/server"
+      }
+    },
+
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "Client": {
