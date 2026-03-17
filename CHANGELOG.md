@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returns lighting state on demand. Pass a group name to get the full
   property table, or a group and property name to get a single value.
 
+### Fixed
+
+- The virtual default layer now includes defaults for all instance-based
+  groups (Atmosphere, Sky, Clouds, SunRaysEffect, ColorCorrectionEffect).
+  When a layer partially defines a group, omitted properties now resolve
+  to Roblox Studio defaults instead of retaining stale values from a
+  previous layer. Instance group defaults are only included when at least
+  one real layer references that group, so instances are still destroyed
+  when no layer defines them.
+
 ## [0.2.0] - 2026-03-16
 
 ### Fixed

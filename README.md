@@ -224,11 +224,12 @@ cannot be removed. Resolution is two-pass per property:
 - top-down to find the highest-priority fixed base value while collecting functions
 - bottom-up to apply collected functions from low to high priority
 
-The virtual default ensures that service properties (`Lighting`, `Workspace`)
-always revert to Roblox defaults when no layer defines them, and modifier
-functions always receive a real base value. Instance-based groups (Sky,
-Atmosphere, Clouds, SunRaysEffect, ColorCorrectionEffect) are not part of the
-default -- they are destroyed when no active layer defines them.
+The virtual default covers all property groups. Service properties (`Lighting`,
+`Workspace`) are always included. Instance-based groups (Sky, Atmosphere,
+Clouds, SunRaysEffect, ColorCorrectionEffect) are included when at least one
+active layer references that group, so partially-defined groups resolve missing
+properties to Roblox defaults. When no layer defines an instance group at all,
+the instance is destroyed.
 
 During transitions, only properties defined by the pushed/popped layer are
 interpolated. All other properties (including dynamic values like a ticking

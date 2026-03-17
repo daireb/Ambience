@@ -49,16 +49,20 @@ transform it.
 #### Default layer
 
 A hard-coded `ROBLOX_DEFAULTS` table is appended as the lowest-priority
-layer during resolution. It contains Roblox Studio defaults for service
-properties (`Lighting` and `Workspace`) only. This means:
+layer during resolution. It contains Roblox Studio defaults for all
+property groups. Service groups (`Lighting`, `Workspace`) are always
+included. Instance-based groups (`Atmosphere`, `Sky`, `Clouds`,
+`SunRaysEffect`, `ColorCorrectionEffect`) are conditionally included --
+only when at least one real layer references that group. This means:
 
 - Service properties always have a fixed base value. Modifier functions
   never receive `nil`.
 - When all user layers are popped, service properties revert to Roblox
   defaults automatically.
-- Instance-based groups (Sky, Atmosphere, Clouds, SunRaysEffect,
-  ColorCorrectionEffect) are **not** in the defaults. Their absence from
-  the resolved state causes `clear_stale_instances` to destroy them.
+- When a layer partially defines an instance group, omitted properties
+  resolve to Roblox defaults instead of retaining stale values.
+- Instance groups are still destroyed by `clear_stale_instances` when
+  no real layer defines them.
 
 The default layer is invisible to `push`/`pop`/`clear`/`getActive`.
 

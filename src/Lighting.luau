@@ -14,7 +14,6 @@ export type LightingData = {
 
 		GeographicLatitude: number?,
 		ClockTime: number?,
-		TimeOfDay: string?,
 
 		FogEnd: number?,
 		FogStart: number?,
@@ -92,10 +91,49 @@ local ROBLOX_DEFAULTS: ResolvableLightingData = {
 		ShadowSoftness = 0.2,
 		GeographicLatitude = 41.733,
 		ClockTime = 14,
-		TimeOfDay = "14:00:00",
 		FogEnd = 100000,
 		FogStart = 0,
 		FogColor = Color3.fromRGB(192, 192, 192),
+	},
+	Atmosphere = {
+		Density = 0,
+		Offset = 0,
+		Color = Color3.fromRGB(215, 255, 255),
+		Decay = Color3.fromRGB(92, 60, 13),
+		Glare = 0,
+		Haze = 0,
+	},
+	Sky = {
+		CelestialBodiesShown = true,
+		MoonAngularSize = 11,
+		MoonTextureId = "rbxassetid://6444320592",
+		SunAngularSize = 21,
+		SunTextureId = "rbxassetid://6444320512",
+		StarCount = 3000,
+		SkyboxBk = "rbxassetid://6444884337",
+		SkyboxDn = "rbxassetid://6444884785",
+		SkyboxFt = "rbxassetid://6444884337",
+		SkyboxLf = "rbxassetid://6444884337",
+		SkyboxRt = "rbxassetid://6444884337",
+		SkyboxUp = "rbxassetid://6444884337",
+	},
+	Clouds = {
+		Cover = 0.5,
+		Density = 0.7,
+		Enabled = true,
+		Color = Color3.fromRGB(255, 255, 255),
+	},
+	SunRaysEffect = {
+		Intensity = 0.25,
+		Spread = 1,
+		Enabled = true,
+	},
+	ColorCorrectionEffect = {
+		Brightness = 0,
+		Contrast = 0,
+		Saturation = 0,
+		TintColor = Color3.fromRGB(255, 255, 255),
+		Enabled = true,
 	},
 	Workspace = {
 		GlobalWind = Vector3.zero,
@@ -312,8 +350,24 @@ local function selective_lerp_lightingdata(
 end
 
 local function resolve_lighting(layers: { ResolvableLightingData }): (LightingData, boolean)
+	local effective_defaults: ResolvableLightingData = {
+		Lighting = ROBLOX_DEFAULTS.Lighting,
+		Workspace = ROBLOX_DEFAULTS.Workspace,
+	}
+	for _, layer in ipairs(layers) do
+		for group_name, props in pairs(layer) do
+			if
+				props ~= nil
+				and (ROBLOX_DEFAULTS :: any)[group_name] ~= nil
+				and (effective_defaults :: any)[group_name] == nil
+			then
+				(effective_defaults :: any)[group_name] = (ROBLOX_DEFAULTS :: any)[group_name]
+			end
+		end
+	end
+
 	local all_layers = table.clone(layers)
-	table.insert(all_layers, ROBLOX_DEFAULTS)
+	table.insert(all_layers, effective_defaults)
 
 	local key_map: { [string]: { [string]: boolean } } = {}
 	for _, layer in ipairs(all_layers) do
