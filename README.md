@@ -9,7 +9,7 @@ lighting, while sounds from all active layers play simultaneously.
 ## Install
 
 ```bash
-pesde add gh#daireb/Ambience#v0.2.0
+pesde add gh#daireb/Ambience#v0.3.0
 ```
 
 ## Quick start
@@ -179,6 +179,19 @@ Return whether a layer with the given id is currently active.
 ### `Ambience.getActive(): { string }`
 
 Return a list of currently active layer ids (highest priority first).
+
+### `Ambience.query(group: string, property: string?): any`
+
+Resolve the current layer stack and return lighting state. With one argument,
+returns the full property table for that group (e.g. `"Lighting"`, `"Sky"`).
+With two arguments, returns a single property value. Returns `nil` if no
+active layer defines the requested group or property.
+
+```lua
+Ambience.query("Lighting")               --> { Brightness = 3, Ambient = ..., ... }
+Ambience.query("Lighting", "Brightness") --> 3
+Ambience.query("Sky")                    --> { CelestialBodiesShown = true, ... } or nil
+```
 
 ### `Ambience.preset(p: Preset): Preset`
 

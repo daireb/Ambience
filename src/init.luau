@@ -174,9 +174,7 @@ local function refresh_lighting(transition: number?, transition_keys: { [string]
 
 			local alpha = (os.clock() - start_time) / duration
 			local target = LightingModule.resolve_lighting(collect_lighting_layers())
-			local frame = LightingModule.selective_lerp_lightingdata(
-				from_snapshot, target, alpha, transition_keys
-			)
+			local frame = LightingModule.selective_lerp_lightingdata(from_snapshot, target, alpha, transition_keys)
 
 			LightingModule.write_lightingdata(frame)
 			current_lighting_state = frame
@@ -329,6 +327,15 @@ local function getActive(): { string }
 	return ids
 end
 
+local function query(group: string, property: string?): any
+	local resolved = LightingModule.resolve_lighting(collect_lighting_layers())
+	local group_data = (resolved :: any)[group]
+	if property then
+		return group_data and group_data[property]
+	end
+	return group_data
+end
+
 return {
 	register = register,
 	registerFromFolder = registerFromFolder,
@@ -338,6 +345,7 @@ return {
 	clear = clear,
 	isActive = isActive,
 	getActive = getActive,
+	query = query,
 	preset = preset,
 	Track = TrackModule,
 }

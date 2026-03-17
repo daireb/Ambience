@@ -37,12 +37,13 @@ export type LightingData = {
 		SunTextureId: string?,
 		StarCount: number?,
 
-		SkyboxBk: string?,
-		SkyboxDn: string?,
-		SkyboxFt: string?,
-		SkyboxLf: string?,
-		SkyboxRt: string?,
-		SkyboxUp: string?,
+		-- Textures are non-optional because skyboxes are useless without them. Avoiding a footgun!
+		SkyboxBk: string,
+		SkyboxDn: string,
+		SkyboxFt: string,
+		SkyboxLf: string,
+		SkyboxRt: string,
+		SkyboxUp: string,
 	}?,
 	Clouds: {
 		Cover: number?,
