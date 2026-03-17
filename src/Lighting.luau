@@ -81,6 +81,28 @@ export type ResolvableLightingData = {
 	Workspace: ResolveProps?,
 }
 
+local ROBLOX_DEFAULTS: ResolvableLightingData = {
+	Lighting = {
+		Ambient = Color3.fromRGB(0, 0, 0),
+		Brightness = 1,
+		ColorShift_Bottom = Color3.fromRGB(0, 0, 0),
+		ColorShift_Top = Color3.fromRGB(0, 0, 0),
+		OutdoorAmbient = Color3.fromRGB(128, 128, 128),
+		ShadowSoftness = 0.2,
+		GeographicLatitude = 41.733,
+		ClockTime = 14,
+		TimeOfDay = "14:00:00",
+		FogEnd = 100000,
+		FogStart = 0,
+		FogColor = Color3.fromRGB(192, 192, 192),
+	},
+	Workspace = {
+		GlobalWind = Vector3.zero,
+	},
+}
+
+local INSTANCE_CLASSES = { "Atmosphere", "Sky", "SunRaysEffect", "ColorCorrectionEffect", "Clouds" }
+
 local function write_to_instance(instance_type: string, properties_table: { [string]: any }?)
 	local instance: Instance = nil
 	local parent: Instance? = nil
@@ -125,16 +147,8 @@ local function write_lightingdata(data: LightingData)
 end
 
 local function clear_stale_instances(data: LightingData)
-	local class_data: { [string]: { [string]: any }? } = {
-		Atmosphere = data.Atmosphere :: { [string]: any }?,
-		Sky = data.Sky :: { [string]: any }?,
-		SunRaysEffect = data.SunRaysEffect :: { [string]: any }?,
-		ColorCorrectionEffect = data.ColorCorrectionEffect :: { [string]: any }?,
-		Clouds = data.Clouds :: { [string]: any }?,
-	}
-
-	for class_name, properties in pairs(class_data) do
-		if properties == nil then
+	for _, class_name in ipairs(INSTANCE_CLASSES) do
+		if (data :: any)[class_name] == nil then
 			write_to_instance(class_name, nil)
 		end
 	end
@@ -297,8 +311,11 @@ local function selective_lerp_lightingdata(
 end
 
 local function resolve_lighting(layers: { ResolvableLightingData }): (LightingData, boolean)
+	local all_layers = table.clone(layers)
+	table.insert(all_layers, ROBLOX_DEFAULTS)
+
 	local key_map: { [string]: { [string]: boolean } } = {}
-	for _, layer in ipairs(layers) do
+	for _, layer in ipairs(all_layers) do
 		for instance_type, properties in pairs(layer) do
 			if properties ~= nil then
 				if not key_map[instance_type] then
@@ -321,8 +338,7 @@ local function resolve_lighting(layers: { ResolvableLightingData }): (LightingDa
 			local modifiers: { (any) -> any } = {}
 			local base_value: any = nil
 
-			-- Pass 1 (top-down): collect modifier functions until first fixed base value.
-			for _, layer in ipairs(layers) do
+			for _, layer in ipairs(all_layers) do
 				local properties = layer[instance_type]
 				local raw_value = properties and properties[key]
 				if raw_value ~= nil then
@@ -336,22 +352,22 @@ local function resolve_lighting(layers: { ResolvableLightingData }): (LightingDa
 				end
 			end
 
-		local current = base_value
-		for index = #modifiers, 1, -1 do
-			local ok, result = pcall(modifiers[index], current)
-			if not ok then
-				warn(`Lighting modifier failed at {instance_type}.{key}: {result}`)
-			else
-				current = result
+			local current = base_value
+			for index = #modifiers, 1, -1 do
+				local ok, result = pcall(modifiers[index], current)
+				if not ok then
+					warn(`Lighting modifier failed at {instance_type}.{key}: {result}`)
+				else
+					current = result
+				end
 			end
-		end
 
-		if current ~= nil then
-			if not resolved[instance_type] then
-				resolved[instance_type] = {}
+			if current ~= nil then
+				if not resolved[instance_type] then
+					resolved[instance_type] = {}
+				end
+				resolved[instance_type][key] = current
 			end
-			resolved[instance_type][key] = current
-		end
 		end
 	end
 

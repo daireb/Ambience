@@ -9,7 +9,7 @@ lighting, while sounds from all active layers play simultaneously.
 ## Install
 
 ```bash
-pesde add gh#daireb/Ambience#v0.1.1
+pesde add gh#daireb/Ambience#v0.2.0
 ```
 
 ## Quick start
@@ -139,8 +139,8 @@ return Ambience.preset({
 })
 ```
 
-If no lower-priority fixed value exists for a property, modifier functions for that
-property are skipped.
+If no lower-priority fixed value exists for a property, modifier functions receive
+the Roblox Studio default for that property (see [How layering works](#how-layering-works)).
 
 ## API
 
@@ -205,14 +205,17 @@ The Track builder module. Used to create sound tracks for presets.
 
 ## How layering works
 
-**Lighting**: Active layers are sorted by priority (highest first). Resolution is
-two-pass per property:
+**Lighting**: Active layers are sorted by priority (highest first). A virtual
+default layer with Roblox Studio defaults sits at the bottom of the stack and
+cannot be removed. Resolution is two-pass per property:
 - top-down to find the highest-priority fixed base value while collecting functions
 - bottom-up to apply collected functions from low to high priority
 
-This supports relative modifiers like rain darkening day/night differently while
-keeping fixed overrides simple. Properties not defined by any layer are left at
-their Roblox defaults.
+The virtual default ensures that service properties (`Lighting`, `Workspace`)
+always revert to Roblox defaults when no layer defines them, and modifier
+functions always receive a real base value. Instance-based groups (Sky,
+Atmosphere, Clouds, SunRaysEffect, ColorCorrectionEffect) are not part of the
+default -- they are destroyed when no active layer defines them.
 
 During transitions, only properties defined by the pushed/popped layer are
 interpolated. All other properties (including dynamic values like a ticking

@@ -44,8 +44,23 @@ Result: 3 -> * 0.5 -> * 0.8 = 1.2
 ```
 
 Fixed values override. Functions receive the current built-up value and
-transform it. If no fixed base exists for a property, all functions for
-it are skipped.
+transform it.
+
+#### Default layer
+
+A hard-coded `ROBLOX_DEFAULTS` table is appended as the lowest-priority
+layer during resolution. It contains Roblox Studio defaults for service
+properties (`Lighting` and `Workspace`) only. This means:
+
+- Service properties always have a fixed base value. Modifier functions
+  never receive `nil`.
+- When all user layers are popped, service properties revert to Roblox
+  defaults automatically.
+- Instance-based groups (Sky, Atmosphere, Clouds, SunRaysEffect,
+  ColorCorrectionEffect) are **not** in the defaults. Their absence from
+  the resolved state causes `clear_stale_instances` to destroy them.
+
+The default layer is invisible to `push`/`pop`/`clear`/`getActive`.
 
 Any property backed by a function anywhere in the stack is flagged as
 dynamic. When dynamic properties exist, a per-frame loop re-resolves

@@ -28,10 +28,6 @@ local active_layers: { LayerState } = {}
 local lighting_transition_token = 0
 local current_lighting_state: LightingData = {}
 
-local function is_empty_lighting(data: LightingData): boolean
-	return next(data) == nil
-end
-
 local function get_priority(preset: Preset): number
 	return preset.priority or 0
 end
@@ -113,12 +109,11 @@ local function collect_lighting_layers(): { ResolvableLightingData }
 end
 
 local function write_lighting_snapshot(data: LightingData)
-	if is_empty_lighting(data) then
+	if #active_layers == 0 then
 		LightingModule.clear_lighting()
-	else
-		LightingModule.write_lightingdata(data)
-		LightingModule.clear_stale_instances(data)
 	end
+	LightingModule.write_lightingdata(data)
+	LightingModule.clear_stale_instances(data)
 end
 
 local function get_lighting_keys(p: Preset): { [string]: { [string]: true } }?
@@ -159,7 +154,7 @@ local function refresh_lighting(transition: number?, transition_keys: { [string]
 
 	local new_resolved, new_dynamic = LightingModule.resolve_lighting(collect_lighting_layers())
 
-	if duration <= 0 or is_empty_lighting(current_lighting_state) then
+	if duration <= 0 or next(current_lighting_state) == nil then
 		write_lighting_snapshot(new_resolved)
 		current_lighting_state = new_resolved
 		if new_dynamic then
